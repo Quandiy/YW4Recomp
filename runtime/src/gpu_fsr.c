@@ -89,10 +89,22 @@ static int create(uint32_t rw, uint32_t rh, uint32_t ow, uint32_t oh) {
         fx.Query(NULL, &qv.header);
         static int listed;
         const char *want = getenv("YW4_FSR_VERSION");
+        /* FSR 4 runs on the matrix units of RDNA 4 (Radeon RX 9000). Older Radeons are offered it through an
+         * emulated path that costs ~3x FSR 3.1 (RX 6650 XT at 1080p: 6.6 ms vs 2.2 ms, half the 60 fps frame
+         * budget) for no visible gain at native size, so there FSR 3.1 is the default. YW4_FSR_VERSION wins. */
+        int prefer3 = 0;
+        if (!want) {
+            VkPhysicalDeviceProperties p;
+            vkGetPhysicalDeviceProperties(vk.gpu, &p);
+            prefer3 = p.vendorID == 0x1002 && !strstr(p.deviceName, "RX 9");
+        }
         for (uint64_t i = 0; i < count && i < 16; i++) {
             if (!listed) fprintf(stderr, "yw4: fsr: offers %s\n", names[i] ? names[i] : "?");
             if (want && names[i] && !strcmp(want, names[i])) over.versionId = ids[i];
+            if (prefer3 && !over.versionId && names[i] && !strncmp(names[i], "3.", 2)) over.versionId = ids[i];
         }
+        if (prefer3 && over.versionId && !listed)
+            fprintf(stderr, "yw4: fsr: FSR 3.1 on this Radeon (FSR 4 needs RDNA 4 to be fast; YW4_FSR_VERSION overrides)\n");
         listed = 1;
         if (over.versionId) backend.header.pNext = &over.header;
         else if (want) fprintf(stderr, "yw4: fsr: no version %s: the default instead\n", want);
