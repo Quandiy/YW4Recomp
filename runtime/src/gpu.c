@@ -565,6 +565,26 @@ int gpu_buffer_at(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSize *off
 
 /* ================================================================== formats */
 
+/* NVN's DEPTH24_STENCIL8. AMD's drivers (RDNA and earlier on Windows) have no D24_UNORM_S8_UINT depth
+ * attachment: an image made with it gets no depth usage (see the usage flags in image creation), so the
+ * scene's depth test and the lighting and fog that read depth all fail (the town drawn as fog, 2026-11-08,
+ * RX 6650 XT). There the nearest that works is D32_SFLOAT_S8_UINT, as DXVK and the Switch emulators do:
+ * shaders read either as depth in [0, 1]. Asked once the device exists; before that, the game's format. */
+static VkFormat depth24_stencil8(void) {
+    static VkFormat chosen;
+    if (chosen) return chosen;
+    if (!vk.gpu) return VK_FORMAT_D24_UNORM_S8_UINT;
+    VkFormatProperties fp;
+    vkGetPhysicalDeviceFormatProperties(vk.gpu, VK_FORMAT_D24_UNORM_S8_UINT, &fp);
+    if (fp.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        chosen = VK_FORMAT_D24_UNORM_S8_UINT;
+    } else {
+        chosen = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        fprintf(stderr, "yw4: gpu: D24_UNORM_S8_UINT can't be a depth target on this GPU: D32_SFLOAT_S8_UINT instead\n");
+    }
+    return chosen;
+}
+
 VkFormat gpu_format(uint32_t f) {
     switch (f) {
     case 0x01: return VK_FORMAT_R8_UNORM;
@@ -607,7 +627,7 @@ VkFormat gpu_format(uint32_t f) {
     case 0x32: return VK_FORMAT_D16_UNORM;
     case 0x33: return VK_FORMAT_D32_SFLOAT;  /* DEPTH24 */
     case 0x34: return VK_FORMAT_D32_SFLOAT;
-    case 0x35: return VK_FORMAT_D24_UNORM_S8_UINT;
+    case 0x35: return depth24_stencil8();
     case 0x36: return VK_FORMAT_D32_SFLOAT_S8_UINT;
     case 0x38: return VK_FORMAT_R8G8B8A8_SRGB;
     case 0x3C: return VK_FORMAT_R5G6B5_UNORM_PACK16;
