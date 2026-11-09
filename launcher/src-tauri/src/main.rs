@@ -21,7 +21,7 @@ fn launcher_version() -> String {
 /// The project's GitHub page in the player's browser. Only this one address: the screens can't open others.
 #[tauri::command]
 fn open_project_page() -> Result<(), String> {
-    const URL: &str = "https://github.com/ILFforever/YW4Recomp";
+    const URL: &str = "https://github.com/Quandiy/YW4Recomp";
     #[cfg(windows)]
     let r = std::process::Command::new("explorer").arg(URL).spawn();
     #[cfg(not(windows))]
@@ -33,8 +33,8 @@ fn open_project_page() -> Result<(), String> {
 #[tauri::command]
 fn open_link(which: String) -> Result<(), String> {
     let url = match which.as_str() {
-        "project" => "https://github.com/ILFforever/YW4Recomp",
-        "issues" => "https://github.com/ILFforever/YW4Recomp/issues",
+        "project" => "https://github.com/Quandiy/YW4Recomp",
+        "issues" => "https://github.com/Quandiy/YW4Recomp/issues",
         _ => return Err("unknown link".into()),
     };
     std::process::Command::new("explorer").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())

@@ -356,7 +356,7 @@ pub fn report_crash(install: String, code: i32, log: String) -> Result<String, S
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let zip = dir.join(format!("yw4_crash_{}.zip", now()));
     std::fs::write(&zip, stored_zip(&files)).map_err(|e| format!("couldn't save the report ({e})"))?;
-    let url = format!("https://github.com/ILFforever/YW4Recomp/issues/new?template=bug.yml&title={}&what={}&version={}&pc={}",
+    let url = format!("https://github.com/Quandiy/YW4Recomp/issues/new?template=bug.yml&title={}&what={}&version={}&pc={}",
         url_value("Crash: the game closed unexpectedly"), url_value(&format!("The game closed unexpectedly (exit code {code}).")),
         url_value(&version), url_value(&gpu));
     if std::env::var("YW4_REPORT_OPEN").as_deref() != Ok("0") {

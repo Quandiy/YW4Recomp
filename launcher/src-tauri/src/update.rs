@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// The build protocol this launcher speaks (tools/yw4/build_install.py PROTOCOL).
 pub const PROTOCOL: i64 = 1;
 pub const LAUNCHER: &str = include_str!("../../VERSION");
-const RELEASES: &str = "https://api.github.com/repos/ILFforever/YW4Recomp/releases?per_page=30";
+const RELEASES: &str = "https://api.github.com/repos/Quandiy/YW4Recomp/releases?per_page=30";
 
 type Ver = (u32, u32, u32);
 
@@ -191,7 +191,7 @@ pub async fn check_updates(app: tauri::AppHandle, install: String, built: String
 /// A newer launcher's release page in the player's browser: only this repo's release pages.
 #[tauri::command]
 pub fn open_release_page(url: String) -> Result<(), String> {
-    if !url.starts_with("https://github.com/ILFforever/YW4Recomp/releases/") || url.contains(['"', ' ', '&', '|']) {
+    if !url.starts_with("https://github.com/Quandiy/YW4Recomp/releases/") || url.contains(['"', ' ', '&', '|']) {
         return Err("not a release page".into());
     }
     hidden(Command::new("explorer").arg(&url)).spawn().map(|_| ()).map_err(|e| e.to_string())

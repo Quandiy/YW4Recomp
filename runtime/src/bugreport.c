@@ -27,7 +27,7 @@
 
 const char *yw4_log_path(void);  /* log.c */
 
-#define REPO_ISSUES "https://github.com/ILFforever/YW4Recomp/issues/new"
+#define REPO_ISSUES "https://github.com/Quandiy/YW4Recomp/issues/new"
 #define GAME_VERSION "2.2.0"
 
 /* ---- bytes */

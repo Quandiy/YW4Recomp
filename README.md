@@ -8,6 +8,16 @@
   <sub>A fan static recompilation of the Nintendo Switch game (update 2.2.0), in the style of <a href="https://github.com/N64Recomp/N64Recomp">N64Recomp</a>: the game's code is translated into a native Windows program.</sub>
 </p>
 
+> **Fork von Quandiy** – basiert auf [ILFforever/YW4Recomp](https://github.com/ILFforever/YW4Recomp) (MIT), mit eigenen Fixes:
+> AMD/Radeon-Fixes, FSR 3.1 und ruhigere 60 fps, Pipeline-Cache, Post bei Lambert, keine Zeitumstellungs-Strafe
+> mehr, Demon-Hand-Absturz behoben.
+>
+> **So spielst du es:** Lade unter [Releases](https://github.com/Quandiy/YW4Recomp/releases) den
+> `YW4-Recomp-Launcher-…-setup.exe` herunter und installiere ihn. Im Launcher wählst du deine **eigenen** Dateien
+> aus: die NSP des Spiels, das Update 2.2.0, optional die DLC, und deine `prod.keys`. Der Launcher baut das Spiel
+> dann auf deinem PC (beim ersten Mal ein paar Minuten). Spieldateien und Keys sind hier nicht dabei und werden
+> auch nie hochgeladen. Mods (z. B. die englische Übersetzung) kommen in den Ordner `mods` des Installationsordners.
+
 <p align="center">
   <img alt="Phase 4: renderer" src="https://img.shields.io/badge/phase-4%20·%20renderer-6f42c1">
   <img alt="Platform: Windows, Linux planned" src="https://img.shields.io/badge/platform-Windows%20(Linux%20planned)-informational">
