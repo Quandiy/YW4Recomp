@@ -95,7 +95,11 @@ pub fn drop_other_game_code(install: &Path, used: &Path) {
 #[derive(Serialize, Clone)]
 pub struct GameOffer { version: String, url: String, sha256: String, size: u64, notes: String }
 #[derive(Serialize, Clone)]
-pub struct LauncherOffer { version: String, page: String, notes: String }
+pub struct LauncherOffer {
+    version: String, page: String, notes: String,
+    url: String, sha256: String, size: u64,  // its installer on GitHub (empty: none listed, the page instead)
+    installable: bool,                       // this launcher was installed (not the portable zip): it can update itself
+}
 #[derive(Serialize, Clone, Default)]
 pub struct Updates {
     game: Option<GameOffer>,          // newer game code on GitHub
@@ -166,7 +170,13 @@ pub async fn check_updates(app: tauri::AppHandle, install: String, built: String
                 if launcher.as_ref().map_or(true, |(b, _)| v > *b) {
                     let page = r["html_url"].as_str().unwrap_or("").to_string();
                     let notes = r["body"].as_str().unwrap_or("").to_string();
-                    launcher = Some((v, LauncherOffer { version: format!("{}.{}.{}", v.0, v.1, v.2), page, notes }));
+                    let name = format!("YW4-Recomp-Launcher-{}.{}.{}-setup.exe", v.0, v.1, v.2);
+                    let a = r["assets"].as_array().into_iter().flatten().find(|a| a["name"] == name.as_str());
+                    let url = a.and_then(|a| a["browser_download_url"].as_str()).unwrap_or("").to_string();
+                    let sha256 = a.and_then(|a| a["digest"].as_str()).unwrap_or("").trim_start_matches("sha256:").to_string();
+                    let size = a.and_then(|a| a["size"].as_u64()).unwrap_or(0);
+                    launcher = Some((v, LauncherOffer { version: format!("{}.{}.{}", v.0, v.1, v.2), page, notes,
+                        url, sha256, size, installable: installed_dir().is_some() }));
                 }
             } else if let Some(v) = tag.strip_prefix('v').and_then(ver) {
                 let name = format!("yw4recomp-game-{}.{}.{}.zip", v.0, v.1, v.2);
@@ -242,4 +252,59 @@ pub async fn download_game_update(install: String, version: String, url: String,
             }
         }
     }).await.map_err(|e| e.to_string())?
+}
+
+/// The folder this launcher was installed into by its installer (its uninstall.exe beside it), else None: the
+/// portable zip can't update itself, its player gets the release page.
+fn installed_dir() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    dir.join("uninstall.exe").is_file().then_some(dir)
+}
+
+const LAUNCHER_DOWNLOADS: &str = "https://github.com/Quandiy/YW4Recomp/releases/download/launcher-v";
+
+/// Updates the launcher in place: downloads the new installer from this repo's releases, checks it against GitHub's
+/// SHA-256, then runs it in Tauri's update mode (/P: a progress bar only, and it closes this launcher itself;
+/// /UPDATE: keeps the shortcuts as they are; /R: starts the new launcher when done) into this launcher's own folder,
+/// and quits so its files can be replaced. The game, the saves and the settings are left as they are, as with an
+/// installer run by hand.
+#[tauri::command]
+pub async fn install_launcher_update(app: tauri::AppHandle, version: String, url: String, sha256: String) -> Result<(), String> {
+    let dir = installed_dir().ok_or("This launcher wasn't installed with its installer: get the new one from GitHub.")?;
+    let file = tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, String> {
+        if ver(&version).is_none() || sha256.len() != 64 || !url.starts_with(LAUNCHER_DOWNLOADS)
+            || url.contains(['"', ' ', '&', '|']) {
+            return Err("not a launcher update".to_string());
+        }
+        let file = std::env::temp_dir().join(format!("YW4-Recomp-Launcher-{version}-setup.exe"));
+        let part = file.with_extension("part");
+        let ok = hidden(Command::new(system_tool("curl.exe")).args(["-sSfL", "--max-time", "600", "-o"]).arg(&part).arg(&url))
+            .status().map(|s| s.success()).unwrap_or(false);
+        if !ok {
+            let _ = std::fs::remove_file(&part);
+            return Err("The download didn't finish. Check your connection and try again.".into());
+        }
+        let data = std::fs::read(&part).map_err(|e| e.to_string())?;
+        let got: String = Sha256::digest(&data).iter().map(|b| format!("{b:02x}")).collect();
+        if got != sha256.to_lowercase() {
+            let _ = std::fs::remove_file(&part);
+            return Err("The download isn't the file GitHub lists for this update. Try again later.".into());
+        }
+        let _ = std::fs::remove_file(&file);
+        std::fs::rename(&part, &file).map_err(|e| e.to_string())?;
+        Ok(file)
+    }).await.map_err(|e| e.to_string())??;
+    let mut cmd = Command::new(&file);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // NSIS reads /D= as the rest of the command line, unquoted, and it must come last
+        cmd.raw_arg("/P /UPDATE /R").raw_arg(format!("/D={}", dir.display()));
+    }
+    cmd.spawn().map_err(|e| format!("couldn't start the installer: {e}"))?;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        app.exit(0);
+    });
+    Ok(())
 }

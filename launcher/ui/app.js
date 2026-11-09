@@ -1044,10 +1044,39 @@ function askUpdate(key, title, text, action, run, notes) {
   if (!updateDlg.open) updateDlg.showModal();
   btn.focus();  // Enter takes the update
 }
+// a newer launcher first: it carries the newest game code, so the rebuild question follows it. An installed launcher
+// updates itself (downloaded, checked, installed, restarted); the portable one gets its release page
+function offerLauncher(u) {
+  const l = u.launcher;
+  const self = l.installable && l.url && l.sha256;
+  askUpdate('launcher ' + l.version, `Launcher ${l.version}`,
+    self ? `A new launcher is out${l.size ? ` (${gb(l.size)})` : ''}. It installs itself and starts again; your game, saves and settings stay.`
+         : 'A new launcher is out. Download it and install it over this one; your game and saves stay.',
+    self ? 'Update now' : 'Download', async () => {
+      if (!self) {
+        updateDlg.close();
+        invoke('open_release_page', { url: l.page });
+        return;
+      }
+      const btn = $('update-btn');
+      btn.disabled = true;
+      $('update-later').disabled = true;
+      btn.textContent = 'Downloading…';
+      try {
+        await invoke('install_launcher_update', { version: l.version, url: l.url, sha256: l.sha256 });
+        btn.textContent = 'Installing…';  // the installer closes this window and starts the new launcher
+      } catch (e) {
+        updateDlg.close();
+        popup('Launcher update', String(e));
+      }
+    }, l.notes);
+}
 async function showUpdates(info) {
   let u = null;
   try { u = await invoke('check_updates', { install: inst.install, built: info.version || '' }); } catch (e) { return; }
-  if (u.rebuild) {
+  if (u.launcher && !laterFor.has('launcher ' + u.launcher.version)) {
+    offerLauncher(u);
+  } else if (u.rebuild) {
     askUpdate('rebuild ' + u.rebuild, `Game update ${u.rebuild} is ready`,
       'Rebuild the game to play it. It takes about 5 minutes; your saves stay as they are.', 'Rebuild', async () => {
         updateDlg.close();
@@ -1073,14 +1102,14 @@ async function showUpdates(info) {
         }
         showUpdates(info);  // now the rebuild question, in the same popup
       }, u.game.notes);
-  } else if (u.launcher) {
-    askUpdate('launcher ' + u.launcher.version, `Launcher ${u.launcher.version}`,
-      'A new launcher is out. Download it and install it over this one; your game and saves stay.', 'Download', () => {
-        updateDlg.close();
-        invoke('open_release_page', { url: u.launcher.page });
-      }, u.launcher.notes);
   }
 }
+// while the launcher stays open on the Play screen, ask again every half hour (GitHub at most once an hour: the
+// cached answer in between)
+setInterval(async () => {
+  if (!onScreen('ready') || updateDlg.open || !inst || !inst.install) return;
+  try { showUpdates(await invoke('install_info', { install: inst.install })); } catch (e) { /* next time */ }
+}, 30 * 60 * 1000);
 
 const freeDlg = $('free');
 $('free-btn').addEventListener('click', () => {
