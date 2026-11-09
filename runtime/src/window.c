@@ -1952,7 +1952,7 @@ typedef struct {
 static void guest_main(void *p) {
     Guest *g = p;
     g->fn(g->arg);
-    exit(0);  /* the game's main returned */
+    yw4_exit(0, __FILE__, __LINE__);  /* the game's main returned */
 }
 
 void window_request_screenshot(void) { __atomic_store_n(&screenshot_requested, screenshot_burst(), __ATOMIC_RELEASE); }
@@ -1988,7 +1988,7 @@ void window_run(void (*guest)(void *), void *arg) {
     g.fn = guest, g.arg = arg;
     if (host_thread_start(guest_main, &g, GUEST_HOST_STACK)) {
         fprintf(stderr, "yw4: window: cannot start the guest's thread\n");
-        exit(1);
+        yw4_exit(1, __FILE__, __LINE__);
     }
     for (;;) {
         SDL_Event e;
@@ -2085,7 +2085,7 @@ void window_run(void (*guest)(void *), void *arg) {
             break;
         case SDL_EVENT_QUIT:
             fprintf(stderr, "yw4: window closed\n");
-            exit(0);
+            yw4_exit(0, __FILE__, __LINE__);
         case SDL_EVENT_KEY_DOWN:
             if ((e.key.key == SDLK_LALT || e.key.key == SDLK_RALT) && !settings_open() && !mouse_off()) {
                 if (window) {
