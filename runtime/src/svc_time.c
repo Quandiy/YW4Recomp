@@ -145,11 +145,18 @@ void svc_time(Service *s, IpcRequest *req, IpcResponse *resp) {
         resp->copy_handles[resp->ncopy++] = shared_memory_handle;
         return;
     case 500: {  /* CalculateStandardUserSystemClockDifferenceByUser(snapshot a, snapshot b) -> TimeSpan ns */
+        /* How far the user moved the clock between the snapshots: the change of the user clock's
+         * offset to the steady clock, 0 across boots (another steady source) or with automatic
+         * correction on in both. Not the time that passed: the game takes any nonzero answer for
+         * a changed clock and locks the Crank-a-kai for days. */
         if (req->nx < 2 || req->x[0].size < 0xD0 || req->x[1].size < 0xD0) break;
+        const uint8_t *sa = GPTR(req->x[0].addr), *sb = GPTR(req->x[1].addr);
         int64_t a, b;
-        memcpy(&a, (uint8_t *)GPTR(req->x[0].addr) + 0x40, 8);
-        memcpy(&b, (uint8_t *)GPTR(req->x[1].addr) + 0x40, 8);
-        IPC_OUT(int64_t, 0) = (b - a) * 1000000000;
+        memcpy(&a, sa + 0x00, 8);
+        memcpy(&b, sb + 0x00, 8);
+        int64_t diff = b - a;
+        if (memcmp(sa + 0x10, sb + 0x10, 16) || (sa[0xCC] && sb[0xCC])) diff = 0;
+        IPC_OUT(int64_t, 0) = diff * 1000000000;
         ipc_out_size(resp, 8);
         return;
     }
