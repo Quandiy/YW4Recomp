@@ -11,10 +11,23 @@
 
 #include "ipc_simple.h"
 
-/* Identifies "this boot's" steady clock; any fixed value works. */
-static const uint8_t clock_source[16] = {'y', 'w', '4', 'r', 'e', 'c', 'o', 'm', 'p', 1, 2, 3, 4, 5, 6, 7};
+/* Identifies the steady clock. The game keeps it in its save and compares steady and system
+ * time between runs when the source matches: a steady clock that restarted at 0 with the same
+ * source looked like a changed system clock (the "time change penalty"). So the steady clock
+ * goes on across runs (below), and the source differs from the one the restarting clock used,
+ * so saves from before read as taken on another boot. */
+static const uint8_t clock_source[16] = {'y', 'w', '4', 'r', 'e', 'c', 'o', 'm', 'p', 2, 2, 3, 4, 5, 6, 7};
 
-static int64_t steady_seconds(void) { return (int64_t)(yw4_cntpct() / 19200000u); }
+static int64_t now_seconds(void);
+
+/* Steady seconds: the counter since start-up plus the date at start-up, so it never restarts and
+ * keeps step with the system clock (whose offset to it stays 0). */
+static int64_t steady_base(void) {
+    static int64_t base = -1;
+    if (base < 0) base = now_seconds() - (int64_t)(yw4_cntpct() / 19200000u);
+    return base;
+}
+static int64_t steady_seconds(void) { return (int64_t)(yw4_cntpct() / 19200000u) + steady_base(); }
 
 /* The date and time the game is told. YW4_CLOCK=<POSIX seconds> holds it still at that moment (tests: the sun
  * follows the time of day, so two runs of one replay only match on a held clock). */
@@ -33,6 +46,7 @@ static int64_t now_seconds(void) {
 static void system_clock_context(uint8_t *p) {
     int64_t steady = steady_seconds();
     int64_t offset = now_seconds() - steady;
+    if (offset >= -2 && offset <= 2) offset = 0;  /* rounding of the two reads, not a clock change */
     memcpy(p, &offset, 8);
     memcpy(p + 8, &steady, 8);
     memcpy(p + 0x10, clock_source, 16);
@@ -43,7 +57,9 @@ static void system_clock_context(uint8_t *p) {
 static void time_shared_memory(KSharedMemory *m) {
     uint8_t *p = GPTR(m->guest_addr);
     memset(p, 0, m->size);
-    /* 0x00: SteadyClockContext {u64 internal offset, source}: copy 0 at +0x08 */
+    /* 0x00: SteadyClockContext {u64 internal offset (ns), source}: copy 0 at +0x08 */
+    int64_t internal = steady_base() * 1000000000;
+    memcpy(p + 0x08, &internal, 8);
     memcpy(p + 0x08 + 8, clock_source, 16);
     /* 0x38: local system clock context, copy 0 at +0x40; 0x80: network system clock, +0x88 */
     system_clock_context(p + 0x40);
