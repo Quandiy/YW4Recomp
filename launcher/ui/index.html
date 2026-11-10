@@ -233,6 +233,51 @@
         </section>
         </div>
       </div>
+      <div class="settings-grid two" data-page="3" hidden>
+        <div class="settings-col">
+        <section class="card">
+          <h2>Play together online</h2>
+          <p class="online-note">Trading and Blasters with friends over the internet. In the game, use <b>Swap Locally</b> or
+            local Blasters as if you were in one room: one recruits, the others pick the room.</p>
+          <div class="field online-field">
+            <label for="on-relay"><b>Server</b><small>The host's address</small></label>
+            <input id="on-relay" placeholder="e.g. 217.238.9.1" spellcheck="false" autocomplete="off">
+            <button class="btn small" type="button" id="on-test">Test</button>
+          </div>
+          <div class="field online-field">
+            <label for="on-room"><b>Room code</b><small>The same for all of you</small></label>
+            <input id="on-room" placeholder="e.g. lennox" spellcheck="false" autocomplete="off">
+            <span></span>
+          </div>
+          <div class="field online-field">
+            <label for="on-name"><b>Your name</b><small>What the others see</small></label>
+            <input id="on-name" maxlength="10" placeholder="up to 10 letters" spellcheck="false" autocomplete="off">
+            <span></span>
+          </div>
+          <div class="set-row">
+            <span><small id="on-status">Empty server: local play stays on this PC.</small></span>
+            <button class="btn small" type="button" id="on-save">Save</button>
+          </div>
+        </section>
+        </div>
+        <div class="settings-col">
+        <section class="card">
+          <h2>Host the server</h2>
+          <p class="online-note">One of you runs the server; the others connect to it. Your router must pass
+            <b>TCP port 41230</b> to this PC (once, in the router's port forwarding). Help explains it step by step.</p>
+          <div class="set-row">
+            <span><b>Server on this PC</b><small id="on-host-status">Off</small></span>
+            <button class="btn small" type="button" id="on-host">Start</button>
+          </div>
+          <div class="set-row">
+            <span><b>Your address for friends</b><small id="on-address">Start the server to see it</small></span>
+            <button class="btn small" type="button" id="on-copy" disabled>Copy</button>
+          </div>
+          <p class="online-note">The server keeps running when you close the launcher, so your friends stay in. Stop it
+            here when you're done. Your own Server field can stay as it is: the launcher uses this PC while you host.</p>
+        </section>
+        </div>
+      </div>
       <div class="settings-grid two" data-page="2" hidden>
         <div class="settings-col">
         <section class="card">
@@ -328,6 +373,23 @@
         </section>
         </div>
         <div class="settings-col">
+        <section class="card">
+          <h2>Playing together online</h2>
+          <div class="faq">
+            <b>The host (once)</b>
+            <p>In your router (e.g. Speedport: <i>Internet &rarr; Port-Umleitungen</i>) forward <b>TCP 41230</b> to this PC.
+              Then Settings &rarr; page 3 &rarr; <b>Start</b> the server, and send your friends the address shown there.</p>
+            <b>Everyone (once)</b>
+            <p>Settings &rarr; page 3: the host's address as <b>Server</b>, the same <b>room code</b> for all, your
+              <b>name</b>, then <b>Save</b>. <b>Test</b> checks that the server answers.</p>
+            <b>Each time you play</b>
+            <p>The host starts the server, everyone starts the game. Ark Swap &rarr; <b>Swap Locally</b>: one picks
+              <b>Recruit by myself</b>, the others choose that room from the list (X updates it). Blasters works the same way.</p>
+            <b>Nobody finds the room</b>
+            <p>Same room code everywhere? Test says the server answers? The host's address changes now and then (router
+              restarts): send the new one.</p>
+          </div>
+        </section>
         <section class="card">
           <h2>Troubleshooting</h2>
           <div class="faq">

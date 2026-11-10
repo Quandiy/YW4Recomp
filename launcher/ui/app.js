@@ -640,9 +640,9 @@ let inst = null;  // the launcher's state of the install (Rust: ready.rs, %AppDa
 
 // What's new: written for each release (the launcher ships with the notes of the version it builds)
 const NEWS = {
-  version: '0.8.0',
-  items: ['Contact shadows: soft shadows where things touch', 'Fewer stutters in menus and towns',
-    'XCI cartridge dumps work', 'Version numbers, shown in the game and here'],
+  version: '0.9.0',
+  items: ['Play together online: trading and Blasters with friends (Settings, page 3; Help explains it)',
+    'The launcher updates itself', 'Fixes: mail at Lambert, time-change penalty, Demon Hand, smoother on Radeon'],
 };
 
 function chip(text) {
@@ -860,16 +860,98 @@ async function showSettings() {
   $('set-free').disabled = reclaimable <= 0.05 * GB;
 }
 // Settings has two pages (no scrolling): Playing, then Files; the arrows on the heading row switch
+const SETTINGS_PAGES = 3;
+const PAGE_NAMES = { 1: 'playing', 2: 'where things are kept', 3: 'online' };
+let settingsAt = 1;
 function settingsPage(n) {
+  settingsAt = n;
   document.querySelectorAll('.settings-grid[data-page]').forEach((g) => { g.hidden = g.dataset.page !== String(n); });
-  $('page-num').textContent = `${n} / 2`;
+  $('page-num').textContent = `${n} / ${SETTINGS_PAGES}`;
   $('page-prev').disabled = n === 1;
-  $('page-next').disabled = n === 2;
-  $('page-prev').title = n === 1 ? '' : 'Back: playing';
-  $('page-next').title = n === 2 ? '' : 'Next: where things are kept';
+  $('page-next').disabled = n === SETTINGS_PAGES;
+  $('page-prev').title = n === 1 ? '' : `Back: ${PAGE_NAMES[n - 1]}`;
+  $('page-next').title = n === SETTINGS_PAGES ? '' : `Next: ${PAGE_NAMES[n + 1]}`;
+  if (n === 3) loadOnline();
 }
-$('page-prev').addEventListener('click', () => settingsPage(1));
-$('page-next').addEventListener('click', () => settingsPage(2));
+$('page-prev').addEventListener('click', () => settingsPage(Math.max(1, settingsAt - 1)));
+$('page-next').addEventListener('click', () => settingsPage(Math.min(SETTINGS_PAGES, settingsAt + 1)));
+
+// ---- Settings page 3: playing together online (decision 0057). online.ini in the game folder; the server (relay)
+// on this PC for the one who hosts.
+let onlineAddress = '';
+function onlineStatus(text, kind) {
+  const el = $('on-status');
+  el.textContent = text;
+  el.className = kind || '';
+}
+async function refreshHost() {
+  let on = false;
+  try { on = await invoke('relay_running'); } catch (e) { /* off */ }
+  $('on-host').textContent = on ? 'Stop' : 'Start';
+  const st = $('on-host-status');
+  st.textContent = on ? 'Running: your friends can connect' : 'Off';
+  st.className = on ? 'good' : '';
+  $('on-copy').disabled = !(on && onlineAddress);
+  if (on && !onlineAddress) {
+    $('on-address').textContent = 'Looking it up…';
+    try { onlineAddress = await invoke('public_address'); } catch (e) { $('on-address').textContent = String(e); return; }
+  }
+  $('on-address').textContent = on ? (onlineAddress || '') : 'Start the server to see it';
+  $('on-copy').disabled = !(on && onlineAddress);
+}
+async function loadOnline() {
+  if (!inst || !inst.install) return;
+  try {
+    const o = await invoke('online_get', { install: inst.install });
+    $('on-relay').value = o.relay || '';
+    $('on-room').value = o.room || '';
+    $('on-name').value = o.name || '';
+    onlineStatus(o.relay ? `Saved: server ${o.relay}${o.room ? `, room code ${o.room}` : ''}` : 'Empty server: local play stays on this PC.');
+  } catch (e) { onlineStatus(String(e), 'bad'); }
+  refreshHost();
+}
+$('on-save').addEventListener('click', async () => {
+  try {
+    await invoke('online_set', { install: inst.install, relay: $('on-relay').value, room: $('on-room').value,
+      name: $('on-name').value });
+    await loadOnline();
+    onlineStatus($('on-relay').value ? 'Saved. Start the game to play together.' : 'Saved: local play stays on this PC.', 'good');
+  } catch (e) { onlineStatus(`Not saved: ${e}`, 'bad'); }
+});
+$('on-test').addEventListener('click', async () => {
+  const btn = $('on-test');
+  btn.disabled = true;
+  onlineStatus('Asking the server…');
+  let why = '';
+  try { why = await invoke('relay_test', { address: $('on-relay').value }); } catch (e) { why = String(e); }
+  btn.disabled = false;
+  onlineStatus(why || 'The server answers.', why ? 'bad' : 'good');
+});
+$('on-host').addEventListener('click', async () => {
+  const btn = $('on-host');
+  btn.disabled = true;
+  try {
+    if (await invoke('relay_running')) {
+      await invoke('relay_stop', { install: inst.install });
+    } else {
+      await invoke('relay_start', { install: inst.install });
+      // the host plays through its own server: this PC, unless another server is set
+      if (!$('on-relay').value) {
+        $('on-relay').value = '127.0.0.1';
+        if (!$('on-room').value) $('on-room').value = 'yw4';
+        await invoke('online_set', { install: inst.install, relay: $('on-relay').value, room: $('on-room').value,
+          name: $('on-name').value });
+        onlineStatus('Saved: you play through your own server (127.0.0.1).', 'good');
+      }
+    }
+  } catch (e) { $('on-host-status').textContent = String(e); $('on-host-status').className = 'bad'; }
+  btn.disabled = false;
+  refreshHost();
+});
+$('on-copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(onlineAddress); $('on-copy').textContent = 'Copied'; } catch (e) { /* none */ }
+  setTimeout(() => { $('on-copy').textContent = 'Copy'; }, 1500);
+});
 $('settings-back').addEventListener('click', () => showReady());
 
 // Uninstall: the popup lists what goes (sizes from the install); kept by default: saves and screenshots

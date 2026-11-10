@@ -323,8 +323,43 @@ static void set_env(const char *name, const char *value) {
 #endif
 }
 
+/* online.ini, next to the settings file: playing together over the internet (decision 0057). The launcher's Online
+ * page writes it (YW4_RELAY, YW4_ROOM, YW4_NICKNAME); the game only reads it, and the environment wins over it. */
+static void online_load(const char *settings_path) {
+    char path[1100];
+    snprintf(path, sizeof path, "%s", settings_path);
+    char *slash = strrchr(path, '/'), *back = strrchr(path, '\\');
+    if (back > slash) slash = back;
+    if (slash) slash[1] = 0;
+    else path[0] = 0;
+    strncat(path, "online.ini", sizeof path - strlen(path) - 1);
+    FILE *f = fopen(path, "r");
+    if (!f) {  /* saves and settings in AppData: the launcher writes it in the game folder (work\build\..\..) */
+        const char *base = SDL_GetBasePath();
+        snprintf(path, sizeof path, "%s../../online.ini", base ? base : "");
+        f = fopen(path, "r");
+    }
+    if (!f) return;
+    char line[512];
+    int n = 0;
+    while (fgets(line, sizeof line, f)) {
+        char *eq = strchr(line, '=');
+        if (line[0] == '#' || !eq) continue;
+        *eq = 0;
+        char *value = eq + 1;
+        value[strcspn(value, "\r\n")] = 0;
+        if ((!strcmp(line, "YW4_RELAY") || !strcmp(line, "YW4_ROOM") || !strcmp(line, "YW4_NICKNAME")) && *value &&
+            !getenv(line))
+            set_env(line, value), n++;
+    }
+    fclose(f);
+    fprintf(stderr, "yw4: online: %d from %s%s%s\n", n, path, getenv("YW4_RELAY") ? ", server " : "",
+            getenv("YW4_RELAY") ? getenv("YW4_RELAY") : "");
+}
+
 void settings_load(void) {
     const char *path = settings_file();
+    if (*path) online_load(path);
     FILE *f = *path ? fopen(path, "r") : NULL;
     if (!f) return;
     char line[256];

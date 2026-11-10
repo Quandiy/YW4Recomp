@@ -537,3 +537,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border-radius: 6
 .icon-btn.small.spinning svg { animation: spin-once .45s ease-in-out; }
 @keyframes spin-once { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
 @media (prefers-reduced-motion: reduce) { .icon-btn.small.spinning svg { animation: none; } }
+
+/* Settings page 3: playing together online (decision 0057) */
+.online-note { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.online-field { grid-template-columns: 130px minmax(0, 1fr) auto; padding: 8px 0; }
+.online-field input { border: 1px solid var(--lilac-3); border-radius: 10px; font: inherit; }
+#on-status.bad, #on-host-status.bad { color: var(--gold-deep); }
+#on-status.good, #on-host-status.good { color: var(--violet); font-weight: 700; }
