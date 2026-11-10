@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include "codes.h"
+#include "cpklist.h"
 #include "host.h"
 
 #define EMPTY 0xFFFFFFFFu
@@ -28,6 +30,8 @@ typedef struct {
     uint32_t entry;           /* offset in the file table */
     Dir *parent;
     int read_before;          /* YW4_TRACE_ROMFS: its first read was logged */
+    uint8_t *mem;             /* the data in memory instead of from `path` (our Post codes, codes.h) */
+    int from_mod;             /* laid over the game by a mod (overlay) */
 } File;
 struct Dir {
     char *name;
@@ -110,6 +114,11 @@ static int count_files(const Dir *d) {
     return n;
 }
 
+static void mark_mod(Dir *d) {  /* a folder only a mod has: all of it from the mod */
+    for (int i = 0; i < d->nfiles; i++) d->files[i]->from_mod = 1;
+    for (int i = 0; i < d->ndirs; i++) mark_mod(d->dirs[i]);
+}
+
 static void overlay(Dir *dst, const char *path, int depth) {
     DIR *d = depth < 32 ? opendir(path) : NULL;
     if (!d) return;
@@ -134,6 +143,7 @@ static void overlay(Dir *dst, const char *path, int depth) {
                 dst->dirs = realloc(dst->dirs, sizeof *dst->dirs * (size_t)(dst->ndirs + 1));
                 dst->dirs[dst->ndirs++] = c;
                 mod_added += count_files(c);
+                mark_mod(c);
             }
             free(p);
         } else {
@@ -150,7 +160,7 @@ static void overlay(Dir *dst, const char *path, int depth) {
                 dst->files[dst->nfiles++] = f;
                 mod_added++;
             }
-            f->path = p, f->size = (uint64_t)size;
+            f->path = p, f->size = (uint64_t)size, f->from_mod = 1;
         }
     }
     closedir(d);
@@ -312,6 +322,70 @@ static void build(RomfsImage *m, Dir *root, const char *dir) {
             (double)m->data_size / (1 << 30), dir);
 }
 
+/* The file at `path` (relative, '/'-separated) in the tree, or NULL. */
+static File *find_file(Dir *d, const char *path) {
+    const char *slash;
+    while ((slash = strchr(path, '/'))) {
+        Dir *next = NULL;
+        size_t n = (size_t)(slash - path);
+        for (int i = 0; i < d->ndirs && !next; i++)
+            if (strlen(d->dirs[i]->name) == n && !strncmp(d->dirs[i]->name, path, n)) next = d->dirs[i];
+        if (!(d = next)) return NULL;
+        path = slash + 1;
+    }
+    for (int i = 0; i < d->nfiles; i++)
+        if (!strcmp(d->files[i]->name, path)) return d->files[i];
+    return NULL;
+}
+
+/* A file of the tree read whole into memory (NULL if it can't be, or is bigger than `max`). */
+static uint8_t *load_file(const File *f, uint64_t max) {
+    if (f->mem || f->size > max) return NULL;
+    FILE *fp = fopen(f->path, "rb");
+    if (!fp) return NULL;
+    uint8_t *b = malloc((size_t)f->size + 1);
+    if (b && fread(b, 1, (size_t)f->size, fp) != f->size) free(b), b = NULL;
+    fclose(fp);
+    return b;
+}
+
+/* cpklist_redirect's question: does a mod have `path` as a loose file, and how big is it */
+static int mod_has(const char *path, uint64_t *size, void *root) {
+    File *f = find_file(root, path);
+    if (!f || !f->from_mod) return 0;
+    *size = f->size;
+    return 1;
+}
+
+/* data/cpk_list.cfg.bin, once, in memory: mods' loose files in place of the game's archived ones (cpklist.h), and our
+ * own Post passwords (codes.h) in the password list when it is a loose file (the English patch's), with its new size:
+ * the game reads a loose file only as far as the size the list says. */
+static void patch_cpk_list(Dir *root) {
+    File *l = find_file(root, "data/cpk_list.cfg.bin");
+    uint8_t *list = l ? load_file(l, 64u << 20) : NULL;
+    if (!list) return;
+    int changed = 0;
+    int n = cpklist_redirect(list, l->size, mod_has, root);
+    if (n < 0) fprintf(stderr, "yw4: mods: cpk_list.cfg.bin isn't laid out as expected: mods' loose files stay unread\n");
+    else if (n) fprintf(stderr, "yw4: mods: %d file(s) from mods in place of the game's archived ones\n", n), changed = 1;
+
+    File *f = find_file(root, CODES_FILE);
+    uint8_t *in = f ? load_file(f, 1u << 20) : NULL, *out = NULL;
+    uint64_t size = 0;
+    if (!f) fprintf(stderr, "yw4: codes: no loose password list (it comes with the English patch): our codes are off\n");
+    if (in) out = codes_extend(in, f->size, &size);
+    if (out && !cpklist_set_size(list, l->size, CODES_FILE, (uint32_t)size)) {
+        f->mem = out, f->size = size;
+        changed = 1;
+    } else {
+        if (out) fprintf(stderr, "yw4: codes: the password list isn't in cpk_list.cfg.bin as expected: our codes are off\n");
+        free(out);
+    }
+    free(in);
+    if (changed) l->mem = list;
+    else free(list);
+}
+
 int romfs_open(const char *dir) {
     Dir *root = scan(dir, "", NULL, 0);
     if (!root) {
@@ -319,6 +393,7 @@ int romfs_open(const char *dir) {
         return -1;
     }
     apply_mods(root);
+    patch_cpk_list(root);
     build(&game, root, dir);
     return 0;
 }
@@ -354,6 +429,13 @@ static FILE *file_handle(const File *f) {
 }
 
 static int read_file_part(const File *f, uint64_t at, uint8_t *out, uint64_t n) {
+    if (f->mem) {
+        if (f->size < (1u << 20))  /* the password list (not cpk_list): when and how much the game reads */
+            fprintf(stderr, "yw4: codes: the game reads %s +%#llx, %llu of %llu bytes\n", f->name,
+                    (unsigned long long)at, (unsigned long long)n, (unsigned long long)f->size);
+        memcpy(out, f->mem + at, (size_t)n);
+        return 0;
+    }
     FILE *fp = file_handle(f);
     if (!fp) return -1;
 #ifdef _WIN32

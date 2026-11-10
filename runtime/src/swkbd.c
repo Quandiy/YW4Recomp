@@ -7,10 +7,12 @@
  * (0x3ac); offsets from the sdk's keyboardConfig2kbdConfig, values measured 2026-11-07. Until then the answer was
  * UTF-16, which the game read as one letter: new saves named the boy "N". Typing a name: next (textin.h).
  */
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "codes.h"
 #include "gamemenu.h"
 #include "host.h"
 #include "textin.h"
@@ -19,6 +21,24 @@
 
 #define DEFAULT_NAME "Nate"
 #define DEFAULT_GIRL "Katie"  /* the girl's name (the second question of a new game) */
+
+/* The keyboard's header (UTF-16 at KeyboardConfig + 0x24) asks for a password: "password" in any case, or あいことば. */
+static int is_password_prompt(const uint8_t *config) {
+    static const uint16_t aikotoba[] = {0x3042, 0x3044, 0x3053, 0x3068, 0x3070};
+    char ascii[128];
+    uint16_t text[64];
+    int n = 0;
+    for (; n < 63; n++) {
+        text[n] = *(const uint16_t *)(config + 0x24 + 2 * n);
+        if (!text[n]) break;
+        ascii[n] = text[n] < 128 ? (char)tolower(text[n]) : '?';
+    }
+    ascii[n] = 0;
+    if (strstr(ascii, "password")) return 1;
+    for (int i = 0; i + 5 <= n; i++)
+        if (!memcmp(text + i, aikotoba, sizeof aikotoba)) return 1;
+    return 0;
+}
 
 /* ShowKeyboard(String *out, const ShowKeyboardArg &) -> Result */
 void yw4_swkbd_ShowKeyboard(CPUState *c) {
@@ -130,6 +150,15 @@ void yw4_swkbd_ShowKeyboard(CPUState *c) {
         name = typed;
     }
     if (!name || !*name) name = fallback;
+    /* the Post's password prompt (its header: "Enter your password." in the English patch, あいことば in Japanese): one of
+     * our own codes goes to the game in its hiragana form, the one in the password list (codes.h) */
+    if (is_password_prompt(a)) {
+        const char *form = codes_password_form(name);
+        if (form) {
+            fprintf(stderr, "yw4: swkbd: \"%s\" is one of our codes: answered with its form %s\n", name, form);
+            name = form;
+        }
+    }
     /* At most `max` characters (0: no limit), and what the game asked for: UTF-8 when the config says so (the game
      * does, 2026-11-07: before, a UTF-16 answer made the name its first letter, "N"), else UTF-16. */
     uint64_t chars = 0, n = 0;
@@ -154,6 +183,7 @@ void yw4_swkbd_ShowKeyboard(CPUState *c) {
         }
         if (buf && room) buf[n] = 0;
     }
+    codes_trace_password(name);  /* YW4_TRACE_CODES=1 only */
     fprintf(stderr, "yw4: swkbd: answered with \"%s\" (%s, %llu characters, buffer %llu bytes; the game's text \"%s\")\n",
             name, utf8 ? "UTF-8" : "UTF-16", (unsigned long long)chars, (unsigned long long)size, token);
     c->x[0] = 0;
