@@ -69,6 +69,8 @@ int host_readable(uint64_t addr, uint64_t size);
 /* Diagnostics: report(host pc, address) on the writing thread for each write to
  * [addr, addr + size) (one watch per process; Windows only). 0 if armed. */
 int host_write_watch(uint64_t addr, uint64_t size, void (*report)(uint64_t pc, uint64_t addr));
+/* A read watchpoint: report (on the reading thread) up to `reports` reads of [addr, addr + size). 0, or -1. */
+int host_read_watch(uint64_t addr, uint64_t size, long reports, void (*report)(uint64_t pc, uint64_t addr));
 
 /* exit() that says in the log where it came from (and, on Windows, how much memory was left):
  * every exit of the runtime goes through it, so a run that ends without a "crash" line still

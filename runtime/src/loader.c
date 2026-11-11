@@ -51,9 +51,14 @@ void *yw4_reserve_range(uint64_t want, size_t size) {
 }
 
 /* Zeroed read/write memory inside a reserved range; 0 on success. */
+volatile uint32_t yw4_memory_generation;
+
 int yw4_commit(uint64_t addr, size_t size) {
+    __atomic_add_fetch(&yw4_memory_generation, 1, __ATOMIC_RELEASE);
 #ifdef _WIN32
-    return VirtualAlloc((void *)(uintptr_t)addr, size, MEM_COMMIT, PAGE_READWRITE) ? 0 : -1;
+    int r = VirtualAlloc((void *)(uintptr_t)addr, size, MEM_COMMIT, PAGE_READWRITE) ? 0 : -1;
+    __atomic_add_fetch(&yw4_memory_generation, 1, __ATOMIC_RELEASE);
+    return r;
 #else
     if (mprotect((void *)(uintptr_t)addr, size, PROT_READ | PROT_WRITE) == 0) return 0;
     void *p = mmap((void *)(uintptr_t)addr, size, PROT_READ | PROT_WRITE,  /* not reserved: map it */
@@ -87,6 +92,7 @@ void yw4_decommit(uint64_t addr, size_t size) {
 #else
     mmap((void *)(uintptr_t)addr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0);
 #endif
+    __atomic_add_fetch(&yw4_memory_generation, 1, __ATOMIC_RELEASE);  /* after: no answer from before it stays */
 }
 
 void yw4_host_sleep_ns(int64_t ns) { host_sleep_ns(ns); }
