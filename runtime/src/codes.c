@@ -8,8 +8,12 @@
  *   - Hiragana passwords are hashed as typed (the game's own Special Coin password, GameFAQs); Latin letters are not
  *     (the English patch ships an exefs patch, "NoFullwidth", that the recomp doesn't apply), so the password keyboard
  *     (swkbd.c) hands the game a hiragana text for each of our codes, and the list holds that text's hash.
- *   - Places 56 to 58 of the list never take a password; from 59 on they do: three placeholders fill them.
- * Whether made-up hiragana texts work from place 59 is untested: Route999 rides on the game's Special Coin password.
+ *   - Only place 59 of the list ever took a password (2026-11-10/11): places 56 to 58 never (perhaps marked used by
+ *     passwords Level-5 added later), 60 on never (the game seems to know 59 places), so three placeholders fill 56 to
+ *     58 and there is room for one code of ours.
+ *   - Made-up hiragana texts are refused even at place 59; the game's own passwords are taken there: the game checks
+ *     something in the text itself (a check character?). So our one code rides on a real password of the game.
+ * More codes of our own would need the check and the 59 places found in the game's code.
  * Only the English patch loads the table as a loose file (its cpk_list sends the game there), so that is the file we
  * extend: romfs.c hands it to codes_extend when it builds the image. No mod to download: the codes come with the game.
  */
@@ -27,7 +31,7 @@
 
 /* Item ids are item_config's (crc32 of the item's name there). Passwords: letters, digits and signs, any case.
  * `sent`: what the keyboard hands the game for it, and what the list holds the hash of: a real password of the game
- * (works, tested), or NULL for the code's own hiragana form (untested since the placeholders). */
+ * (works at place 59), or NULL for the code's own hiragana form (refused by the game, see above). One code fits. */
 static const struct {
     const char *password;
     const char *sent;

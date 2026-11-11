@@ -1361,6 +1361,28 @@ static void evict_images(uint64_t unused_frames, int scaled_only) {
     if (freed && nvn_stats_enabled()) fprintf(stderr, "yw4: gpu: %d unused images to free\n", freed);
 }
 
+/* A new GPU-only 2D target at `addr` supersedes the images of other sizes there that no texture used this frame and
+ * the GPU is done with: they go to be destroyed now, not after 300 unused frames. The Demon Hand's zoom makes its
+ * five blur targets a little larger every frame at the same addresses: hundreds of old ones piled up (1.1 GiB, new
+ * 64 MiB blocks), frames of 150-330 ms (2026-11-11). gpu_lock held. */
+static void retire_superseded(uint64_t addr, const GpuImage *keep) {
+    uint64_t done = completed();
+    int freed = 0;
+    for (int b = 0; b < IMAGE_BUCKETS; b++)
+        for (GpuImage **pp = &images[b]; *pp;) {
+            GpuImage *g = *pp;
+            if (g != keep && g->key.addr == addr && g->last_frame < present_count && g->last_seq <= done) {
+                *pp = g->next;
+                g->next = dying;
+                dying = g;
+                freed++;
+            } else {
+                pp = &g->next;
+            }
+        }
+    if (freed) image_epoch++;  /* textures' remembered images are looked up again */
+}
+
 /* gpu_present: destroys a few of the images evict_images took out. gpu_lock held. */
 static void destroy_some(int n) {
     while (dying && n-- > 0) {
@@ -1437,6 +1459,7 @@ GpuImage *image_of(VkCommandBuffer cb, NvnTexture *t) {
         .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL, .usage = usage,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
     CHECK(vkCreateImage(vk.device, &ici, NULL, &g->image));
+    if (t->addr && t->pool_flags & POOL_CPU_NO_ACCESS && t->target == TARGET_2D) retire_superseded(t->addr, g);
     image_memory(g);
     VkImageSubresourceRange all = {g->aspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
     VkImageMemoryBarrier b = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,

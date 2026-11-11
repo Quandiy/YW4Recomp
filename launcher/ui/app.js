@@ -640,9 +640,11 @@ let inst = null;  // the launcher's state of the install (Rust: ready.rs, %AppDa
 
 // What's new: written for each release (the launcher ships with the notes of the version it builds)
 const NEWS = {
-  version: '0.9.0',
-  items: ['Play together online: trading and Blasters with friends (Settings, page 3; Help explains it)',
-    'The launcher updates itself', 'Fixes: mail at Lambert, time-change penalty, Demon Hand, smoother on Radeon'],
+  version: '0.9.2',
+  items: ['An Update button beside Play as soon as a new version is out',
+    'Password Route999 at Lambert Post: a Special Coin',
+    "Smoother Demon Hand: no more hitch when Touma's hand appears",
+    'Play together online (Settings, page 3)'],
 };
 
 function chip(text) {
@@ -1153,9 +1155,31 @@ function offerLauncher(u) {
       }
     }, l.notes);
 }
+// The Update button beside Play: shown while anything is out, with what it is; it opens the popup again, also an
+// offer put off with "Later".
+let lastInfo = null;
+function markUpdate(u) {
+  const btn = $('update-now');
+  const what = u.launcher ? `Launcher ${u.launcher.version}` : u.rebuild ? `Game ${u.rebuild} (ready to build)`
+    : u.game ? `Game ${u.game.version}` : '';
+  btn.hidden = !what;
+  btn.title = what ? `Update available: ${what}` : '';
+  $('update-now-label').textContent = u.rebuild && !u.launcher ? 'Rebuild' : 'Update';
+}
+$('update-now').addEventListener('click', () => {
+  laterFor.clear();
+  if (lastInfo) showUpdates(lastInfo);
+});
+// the first look of this run asks GitHub afresh (an update out since the last start shows at once); later looks use
+// the answer of the last hour
+let askedFresh = false;
 async function showUpdates(info) {
+  lastInfo = info;
   let u = null;
-  try { u = await invoke('check_updates', { install: inst.install, built: info.version || '' }); } catch (e) { return; }
+  const fresh = !askedFresh;
+  try { u = await invoke('check_updates', { install: inst.install, built: info.version || '', fresh }); } catch (e) { return; }
+  if (fresh && !u.offline) askedFresh = true;
+  markUpdate(u);
   if (u.launcher && !laterFor.has('launcher ' + u.launcher.version)) {
     offerLauncher(u);
   } else if (u.rebuild) {

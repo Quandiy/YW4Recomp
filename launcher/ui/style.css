@@ -344,6 +344,15 @@ p.list-card { padding: 14px 18px; }
 .btn.primary.play { background: var(--play); color: var(--play-ink); }
 .btn.primary.play:hover { background: var(--play-hi); }
 .btn.primary.play:active { background: var(--play-press); }
+/* the Update button beside Play while an update is out: violet (Play is gold), gently pulsing */
+.btn.update-now { height: 56px; padding: 0 18px; gap: 8px; border-radius: 999px; border: 0; font-size: 16px; font-weight: 800;
+  background: var(--violet); color: var(--white); animation: update-pulse 1.8s ease-in-out infinite; }
+.btn.update-now:hover { background: var(--violet-deep); }
+@keyframes update-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--violet) 55%, transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 0 9px color-mix(in oklch, var(--violet) 0%, transparent); transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) { .btn.update-now { animation: none; } }
 .btn:not(.primary):not(:disabled):active { background: var(--lilac-2); }
 .btn.big { height: 52px; padding: 0 28px; font-size: 17px; }
 
