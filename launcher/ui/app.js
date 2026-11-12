@@ -640,11 +640,11 @@ let inst = null;  // the launcher's state of the install (Rust: ready.rs, %AppDa
 
 // What's new: written for each release (the launcher ships with the notes of the version it builds)
 const NEWS = {
-  version: '0.9.2',
-  items: ['An Update button beside Play as soon as a new version is out',
-    'Password Route999 at Lambert Post: a Special Coin',
-    "Smoother Demon Hand: no more hitch when Touma's hand appears",
-    'Play together online (Settings, page 3)'],
+  version: '0.9.5',
+  items: ['Updates are more reliable: the newest version always comes first, a launcher closed mid-update repairs itself',
+    'A failed update leaves logs\\build.log to send for help',
+    'Shorter freeze at the first Demon Hand',
+    'Password Route999 at Lambert Post: a Special Coin'],
 };
 
 function chip(text) {
@@ -1180,8 +1180,10 @@ async function showUpdates(info) {
   try { u = await invoke('check_updates', { install: inst.install, built: info.version || '', fresh }); } catch (e) { return; }
   if (fresh && !u.offline) askedFresh = true;
   markUpdate(u);
-  if (u.launcher && !laterFor.has('launcher ' + u.launcher.version)) {
-    offerLauncher(u);
+  if (u.launcher) {
+    // a new launcher first, and nothing else until it is in: the game's updates may need it (2026-11-11: friends
+    // whose old launcher rebuilt 0.9.3 again and again instead of downloading 0.9.4)
+    if (!laterFor.has('launcher ' + u.launcher.version)) offerLauncher(u);
   } else if (u.rebuild) {
     askUpdate('rebuild ' + u.rebuild, `Game update ${u.rebuild} is ready`,
       'Rebuild the game to play it. It takes about 5 minutes; your saves stay as they are.', 'Rebuild', async () => {

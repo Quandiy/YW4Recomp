@@ -38,6 +38,15 @@ pub struct Running {
     busy: AtomicBool,
 }
 
+/// Is a build running? (ready.rs: the game set aside by an update is put back only when none is.)
+pub fn building(app: &AppHandle) -> bool {
+    app.try_state::<Arc<Running>>().map_or(false, |r| r.busy.load(Ordering::SeqCst))
+}
+
+/// The build's lines also go to <install>\logsuild.log (rewritten by each build), for a player to send when a
+/// build fails: the screen's details are gone once the launcher closes (2026-11-11).
+static BUILD_LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
+
 #[derive(Serialize, Clone)]
 struct StepEvent { id: String, state: String }
 #[derive(Serialize, Clone)]
@@ -96,6 +105,10 @@ pub fn builder_bundled(app: AppHandle) -> bool {
 
 fn emit_log(app: &AppHandle, line: &str) {
     let _ = app.emit("build-log", line.to_string());
+    if let Some(f) = BUILD_LOG.lock().unwrap().as_mut() {
+        use std::io::Write;
+        let _ = writeln!(f, "{line}");
+    }
 }
 
 /// The repo's own [tools] (compiler, glslang), when running from the repo.
@@ -268,6 +281,8 @@ fn run_all(app: &AppHandle, run: &Running, plan: &Plan) -> Result<(), String> {
     for d in ["data", "work", "mods", "screenshots", "logs"] {
         std::fs::create_dir_all(inst.join(d)).map_err(|e| format!("can't create {}: {e}", inst.join(d).display()))?;
     }
+    *BUILD_LOG.lock().unwrap() = std::fs::File::create(inst.join("logs").join("build.log")).ok();
+    emit_log(app, &format!("YW4 Recomp Launcher {}", crate::update::LAUNCHER.trim()));
     let b = builder(app, &inst);
     emit_log(app, &format!("game code: {}", b.src.display()));
     let cfg = write_config(&b, plan, &inst).map_err(|e| e.to_string())?;
@@ -312,6 +327,8 @@ pub fn start_build(app: AppHandle, plan: Plan) -> Result<(), String> {
     run.cancel.store(false, Ordering::SeqCst);
     std::thread::spawn(move || {
         let r = run_all(&app, &run, &plan);
+        if let Err(e) = &r { emit_log(&app, &format!("the build failed: {e}")); }
+        *BUILD_LOG.lock().unwrap() = None;  // closed: the player can open or send it
         run.busy.store(false, Ordering::SeqCst);
         let _ = app.emit("build-done", match r {
             Ok(()) => DoneEvent { ok: true, message: String::new() },
