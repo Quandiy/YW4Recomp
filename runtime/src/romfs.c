@@ -173,6 +173,17 @@ static int by_string(const void *a, const void *b) { return strcmp(*(char *const
 /* Every mod in YW4_MODS (default work/mods; "none": no mods), in name order (a later one wins): the folders with a
  * romfs/ inside, in Atmosphere's layout contents/010086c00af7c000/<mod>/romfs or simply <mod>/romfs. */
 static void apply_mods(Dir *root) {
+    /* First our own changes to the game's data, made by the build from the player's files (tools/yw4/game_tweaks.py:
+     * Soul Steal by rank, 2026-11-12); the player's mods come after, so theirs win */
+    {
+        int is_dir = 0;
+        if (file_size("work/builtin/romfs", &is_dir) >= 0 && is_dir) {
+            mod_replaced = mod_added = 0;
+            overlay(root, "work/builtin/romfs", 0);
+            fprintf(stderr, "yw4: built-in: %d of the game's files changed, %d added (work/builtin)\n", mod_replaced,
+                    mod_added);
+        }
+    }
     const char *env = getenv("YW4_MODS"), *base = env && *env ? env : "work/mods";
     if (!strcmp(base, "none")) return;
     char dir[1024];

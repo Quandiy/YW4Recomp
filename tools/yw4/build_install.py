@@ -256,7 +256,7 @@ def main() -> int:
         "translate": lambda: run("recomp.translate"),
         "shaders": lambda: (prev.keep(["shaders/glsl"]), run("tools.yw4.shaders"), run("recomp.shader", "--check")),
         "compile": lambda: (prev.keep(game_runtime_files(cfg.work_dir)), run("recomp.build", *build_args)),
-        "finish": lambda: game_ini(cfg, args.saves),
+        "finish": lambda: (run("tools.yw4.game_tweaks"), game_ini(cfg, args.saves)),
     }
     current = None
     try:
